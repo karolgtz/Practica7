@@ -1,0 +1,154 @@
+// Programa para el ESP8266 para medir angulos de orientación con el MPU6050
+// Por Camilo Duque
+// camilo.duque@tec.mx
+#include "ThingSpeak.h"
+#include "Credenciales.h"
+#include <DHTesp.h>
+#include <ESP8266WiFi.h>
+
+// Parámetros de acceso a red WiFi 
+char ssid[] = CRED_SSID;   // nombre de la red WiFi
+char password[] = CRED_PASS; // password de acceso a la red WiFi
+
+
+#include "Wire.h"
+#include <MPU6050_light.h>
+MPU6050 mpu(Wire);
+
+ float offsetX=0;
+ float offsetY=0;
+ float offsetZ=0;
+
+ byte comando = 0;
+
+ // Crear una instancia para el cliente web que consultará la página 
+// Crea una instancia del servidor en el ESP8266 por el puerto 80
+WiFiServer server(80);
+
+// Crear una instancia para el cliente web que consultará la página 
+WiFiClient  client;
+
+
+
+
+String s; // variable para contener la página web en HTML
+ 
+void setup() {
+  Serial.begin(115200);
+  // Establecer la comunicación I2C
+    conectarWiFi();   
+  Wire.begin();
+  // Inicializar el MPU
+  mpu.begin();
+  // Calibrar el MPU
+  mpu.calcGyroOffsets();
+}
+ 
+void loop() {
+
+  Serial.print("Conectado a ");
+  Serial.println(ssid);
+  Serial.println("Servidor Web en la dirección: ");
+  Serial.println(WiFi.localIP()); // Print the IP address
+  // Tomar medidas de variables del MPU
+    mpu.update();
+    if (Serial.available() > 0) {   // Hay datos recibidos?
+    // read the incoming byte:
+    comando = Serial.read(); //leer el comando recibido
+    
+
+    if (comando == 120) {     // si el comando es "x" entonces offset a 0° en eje X
+      // El valor actual del eje X  será el nuevo offset de X
+      offsetX = mpu.getAngleX();
+    }
+    if (comando == 121) {     // si el comando es "y" entonces offset a 0° en eje Y
+      // El valor actual del eje Y  será el nuevo offset de Y
+      offsetY = mpu.getAngleY();
+    }
+    if (comando == 122) {     // si el comando es "z" entonces offset a 0° en eje Z
+      // El valor actual del eje Z  será el nuevo offset de Z
+      offsetZ = mpu.getAngleZ();
+    }
+    }
+
+    
+ // Serial.print(offsetX - mpu.getAngleX());
+  //Serial.print(" , ");
+ // Serial.print(offsetY - mpu.getAngleY());
+  //Serial.print(" , ");
+  //Serial.println(offsetZ - mpu.getAngleZ());
+   
+  delay(10);   
+// Checa si un cliente se ha conectado
+  WiFiClient client = server.available();
+  if (!client) {
+    return;
+  }
+  delay(1);
+
+   while(!client.available()){ }
+  // Lee la primera línea de respuesta del cliente:
+  String req = client.readStringUntil('\r');
+
+  s="";
+  // Código HTML a enviar como respuesta
+  //------------------------------------------------------------------------------------------------------
+  // inicia variable s como string con todo el contenido HTML
+  // coloca titulos y encabezados
+  s = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n";
+  s += "<html><meta http-equiv='Content-Type' content='text/html; charset=utf-8'/>"; 
+  // actualiza la página cada 1 segundos   
+  s += "<meta HTTP-EQUIV=refresh content=1>";
+  s += "<head><title>Informacion de movimiento</title></head><body align=left>";
+  s += "<align=left><font color=\"red\">Variables de movimiento:</font><br>";  
+  s += "<hr/>"; // coloca línea horizontal
+  s += "<table align=center>";
+  s += "<tr><td>";
+  s += "<strong>Movimiento en x:</strong></td><td>";
+  s +=  (offsetX - mpu.getAngleX()); 
+  s += "<strong>                           Movimiento en y: </strong></td><td>";
+  s +=  (offsetY - mpu.getAngleY());
+  s += "<strong>                           Movimiento en z:  </strong></td><td>";
+  s += (offsetZ - mpu.getAngleZ());
+  s += "</td></tr>";  
+  //s += "<tr><td><strong>Comando de encendido: </strong></td>"; 
+  s += "</tr>";
+  s += "</table>";
+  s += "<hr/>"; // coloca linea horizontal
+  s += "<p>&nbsp;</p>"; // cierra linea
+  s += "</body></html>";
+  //------------------------------------------------------------------------------------------------------
+  // Fin código HTML
+  // Envía la respuesta al cliente
+  client.print(s);
+  delay(2000);
+  client.flush(); // limpia buffer de datos del cliente
+}
+
+void  conectarWiFi(){
+  Serial.print("Intentando conexión con ");
+  Serial.println(ssid);
+  WiFi.mode(WIFI_STA);  // Modo de conexión Station (servidor)
+  WiFi.begin(ssid, password); // prepara conexión WiFi a la red 
+  while (WiFi.status() != WL_CONNECTED) { // Intentar mientras no haya conexión
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("Conexión a red WiFi exitosa");
+  // Start the server
+  server.begin(); // Inicializa el módulo ESP8266 como servidor
+  Serial.println("* Servidor Web iniciado *");
+  Serial.print("Disponible en la dirección: ");
+  Serial.println(WiFi.localIP()); // Print the IP address
+}
+
+
+
+EN OTRA PESTAÑA
+// Archivo de credenciales WiFi y Thingspeak para el ESP8266 para implementar un nodo de medición WiFi
+// Por Camilo Duque
+// camilo.duque@tec.mx
+
+// Parámetros de acceso a red WiFi 
+#define CRED_SSID "INFINITUMB8BC_2.4"   // WiFi nombre de red
+#define CRED_PASS "51xR2Yv4nU"          // WiFi password
