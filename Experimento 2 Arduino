@@ -1,0 +1,42 @@
+// Programa para el ESP8266 para medir vibraciones con el MPU6050
+// Por Camilo Duque
+// camilo.duque@tec.mx
+#include "Wire.h"
+#include <MPU6050_light.h>
+
+
+MPU6050 mpu(Wire);
+float Ch0;
+byte incomingByte = 0;
+int TiempoEspera=1;
+ float offsetX=0;
+ //float offsetY=0;
+ //float offsetZ=0;
+
+ byte comando = 0;
+
+void setup() {
+  Serial.begin(115200);
+  // Establecer la comunicación I2C
+  Wire.begin();
+  // Inicializar el MPU
+  mpu.begin();
+  // Calibrar el MPU
+  mpu.calcGyroOffsets();
+}
+ 
+void loop() {
+  // Tomar medidas de variables del MPU
+  mpu.update();
+  if (Serial.available() > 0) {   // Hay datos recibidos?
+    // read the incoming byte:
+    incomingByte = Serial.read(); //leer el comando recibido
+  }
+
+ Serial.print(offsetX - mpu.getAngleX());
+ //Serial.print(" , ");
+ //Serial.print(offsetY - mpu.getAngleY());
+ //Serial.print(" , ");
+// Serial.println(offsetZ - mpu.getAngleZ());
+  delay(1000);   
+}
