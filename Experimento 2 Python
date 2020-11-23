@@ -1,0 +1,107 @@
+"""
+Versión 3 del voltímetro en python basado en ESP8266. Genera gráfica y exporta datos a un archivo .CSV. 
+En esta versión la visibilidad de gráfica se controla con un componente checkbox, al igual que para exportar los datos,
+se tiene otro checkbox.
+"""
+import numpy as np
+import PySimpleGUI as sg
+import serial
+import pandas as pd # pandas es una librería para Ciencias de Datos, aquí se usa para exportar datos a .CSV
+
+# Crear el objeto de conexión serial
+arduino = serial.Serial('COM3', 115200)
+
+# Inicialización de parámetros del Instrumento Virtual
+Volt=0.0
+xcoor=0
+yant=0
+xant= 0
+Tespera = 100 # en milisegundos
+datos = np.array([])  # En este arreglo se guardarán los datos que luego se exportan a .CSV
+SaveData = False  #Esta variable es un control para exportar o no los datos
+
+# Crear un método o función para borrar la gráfica y dibujar los ejes
+def dibujo():
+    # Draw axis    
+    graph.erase()
+    graph.DrawLine((0,0), (100,0))    
+    graph.DrawLine((0,0), (0,100))    
+
+    for x in range(0, 101, 20):    
+        graph.DrawLine((x,-3), (x,3))    
+        if x != 0:    
+            graph.DrawText( x, (x,-10), color='green')    
+
+   # for y in range(0, 101, 20):    
+    #    graph.DrawLine((-3,y), (3,y))    
+     #   if y != 0:    
+      #      graph.DrawText( y/10, (-10,y), color='blue')
+    #for z in range(0, 101, 20):    
+     #   graph.DrawLine((-3,y), (3,y))    
+      #  if z != 0:    
+       #     graph.DrawText( y/10, (-10,y), color='red')
+
+# Configuración de elementos de la ventana
+layout = [  [sg.InputText(default_text=Volt,size=(8, 10),justification='center',background_color='gray', text_color='black', font='Arial 50 bold', key='CajaVolt')], 
+            [sg.HorizontalSeparator()],
+            #Aquí se segregaron un par de check box para controlar la visibilidad de la gráfica y la activación de exportar datos .CSV
+            [sg.Checkbox('Gráfica', key='grafON'),sg.Checkbox('Datos', key='dataON')], 
+            [sg.HorizontalSeparator()],
+            [sg.Graph(canvas_size=(400, 400),visible=False, graph_bottom_left=(-15,-15), graph_top_right=(105,105), background_color='white', key='graph')]]
+
+# Crear la ventana
+window = sg.Window('Mediciones', layout).Finalize()
+graph = window['graph'] # graph es el componente sobre el que se dibuja la gráfica
+
+# dibujar los ejes
+dibujo()  # se ejecuta la función dibujo() definida previamente
+
+# Ciclo infinito para atender eventos
+while True:             
+    
+    # Capturar eventos y valores de elementos de la ventana
+    event, values = window.read(timeout=Tespera)  # Aquí Tespera es el tiempo entre cada iteración del ciclo y establece 
+                                                  # el tiempo entre muestras o lecturas de A0 en el ESP8266
+
+    # Leer el puerto serie
+    #arduino.write(b'a')    
+                           # Le enviamos el caracter "a" o 97 en código ASCII al ESP8266 
+                                                  # para solicitar que nos actualice el valor analógico
+    Volt=float(arduino.readline().strip())        # leemos el valor anlógico que envía el ESP8266
+      
+    # Interrumpir el ciclo con el evento Cerrar ventana
+    if event in (sg.WIN_CLOSED, 'Cancel'):
+        break
+    
+    # si hay eventos, procesar 
+    if event:
+        
+        # almacenar Volt                  
+        if values['dataON']==True:          # si el checkbox dataON esta activo se agregan datos al arreglo
+            SaveData = True                 # se hace TRUE para que al final del programa se exporten los datos a .CSV
+            datos=np.append(datos,Volt)
+
+        # Actualizar resultados
+        window['CajaVolt'].update("{:.{}f}".format( Volt, 4))
+
+        # Dibujar trazo 
+        if values['grafON']==True:        # Si el checkbox grafON está activo, hace visible graph
+            graph.update(visible=True)
+            graph.DrawLine((xant,yant*10),(xcoor,Volt*10) ,color="red",width=1)
+            yant=Volt
+            xant = xcoor
+            xcoor = xcoor + 1
+            if(xcoor==100):         # si llegó al final del eje horizontal, entonces reinicia graph
+                xcoor=0
+                xant= 0            
+                dibujo()
+        else:
+            graph.update(visible=False)
+
+# Guardar datos en archivo .CSV
+if SaveData==True:              # al cerrar el programa, si SaveData es True, entonces
+    df = pd.DataFrame(datos)    # se convierte datos en un objeto DataFrame
+    df.to_csv('MisDatos.csv', header=False)   # y se escribe el DataFrame en el archivo .CSV
+
+window.close()
+arduino.close()
